@@ -11,6 +11,13 @@ agent:
     Demo agent. Proves Forge can onboard an arbitrary MCP server from config alone,
     with no connector-specific code.
 
+  # Needed only for `forge run` (not for `connectors test`). Requires ANTHROPIC_API_KEY.
+  #   npm run forge -- run --message "what is 21 plus 21?" --config examples/everything-demo/agent.yaml
+  llm:
+    provider: anthropic
+    model: claude-haiku-4-5
+    api_key_env: ANTHROPIC_API_KEY
+
 connectors:
   everything:
     type: mcp

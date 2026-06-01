@@ -17,6 +17,8 @@
     "dev": "tsx watch src/cli/index.ts"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.78.0",
+    "@earendil-works/pi-ai": "^0.78.0",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "yaml": "^2.5.0",
     "zod": "^3.23.0"

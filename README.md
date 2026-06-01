@@ -16,13 +16,20 @@ See [`docs/`](./docs) for the PRD, architecture, and connector model.
 
 ## Status
 
-Early. Working today (milestone **M0**):
+Early. Working today (milestone **M0** + Pi harness wiring):
 - ✅ Generic MCP connector onboarding from config (stdio + HTTP transports)
 - ✅ Tool discovery + fail-safe read/write classification
 - ✅ Config load/validate with `${VAR}` credential injection and actionable errors
-- ✅ CLI: `config validate`, `connectors test`
+- ✅ **Pi agent loop** wired: discovered MCP tools bridged into Pi as `AgentTool`s
+- ✅ **Runtime mode enforcement** (read_only / draft / autonomous) gating writes in code, not prompt
+- ✅ **Audit hooks** on every tool call (before-gate decision + after-result)
+- ✅ CLI: `config validate`, `connectors test`, `run --message`
 
-Not built yet: the Pi agent loop, memory (Postgres+pgvector), approvals, runs/audit. See the
+Verified offline (no API key): tool-bridge round-trips through a live MCP server, mode gate correct
+across all read/write × mode combinations (`scripts/smoke-tools.ts`). The full LLM `run` loop is
+wired and typechecks but is **not yet exercised end-to-end** — needs an LLM API key.
+
+Not built yet: persistence (Postgres+pgvector), the approval flow, durable run/audit records. See the
 milestones in [`docs/02-PRD.md`](./docs/02-PRD.md).
 
 ## Quickstart (no credentials needed)
@@ -38,6 +45,9 @@ how it classified each — proving the generic layer with zero connector-specifi
 ```bash
 # validate any config (fast, fail-fast)
 npm run forge -- config validate --config examples/everything-demo/agent.yaml
+
+# run the agent loop once (needs an LLM key, e.g. ANTHROPIC_API_KEY)
+npm run forge -- run --message "what is 21 plus 21?" --config examples/everything-demo/agent.yaml
 ```
 
 ## Configuration
