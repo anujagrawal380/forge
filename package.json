@@ -1,0 +1,29 @@
+{
+  "name": "forge",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Open-source, self-hosted runtime that turns one YAML file into a durable AI agent for your tool stack.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "forge": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "forge": "tsx src/cli/index.ts",
+    "dev": "tsx watch src/cli/index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}

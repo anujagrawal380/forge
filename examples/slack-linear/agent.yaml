@@ -1,0 +1,53 @@
+# The v0 demo workflow: Slack → Linear action items, running THROUGH the generic connector layer.
+# Slack and Linear are just the first two connectors onboarded this way — not special-cased code.
+#
+# Requires credentials in your environment / .env (see .env.example). Then:
+#   npm run forge -- connectors test --config examples/slack-linear/agent.yaml
+#
+# NOTE: the exact MCP server packages/commands below are placeholders — swap them for the
+# Slack/Linear MCP servers you choose to run. The point is that Forge needs no code change to
+# onboard them; only this config.
+
+agent:
+  name: slack-linear-triage
+  mode: draft # read_only | draft | autonomous
+
+  instructions: |
+    You are an operations assistant.
+    Watch configured Slack channels for actionable bugs or tasks.
+    Create clear Linear issues only when there is enough evidence.
+    Avoid duplicates. Always include source links.
+
+  llm:
+    provider: anthropic
+    model: claude-3-5-sonnet
+    api_key_env: ANTHROPIC_API_KEY
+
+connectors:
+  slack:
+    type: mcp
+    transport:
+      type: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-slack"]
+      env:
+        SLACK_BOT_TOKEN: "${SLACK_BOT_TOKEN}"
+        SLACK_TEAM_ID: "${SLACK_TEAM_ID}"
+    scopes:
+      channels:
+        - "#customer-issues"
+        - "#eng-triage"
+
+  linear:
+    type: mcp
+    transport:
+      type: http
+      url: "${LINEAR_MCP_URL}"
+      headers:
+        Authorization: "Bearer ${LINEAR_API_KEY}"
+    scopes:
+      teams: ["Platform"]
+      labels: ["bug", "customer-impacting"]
+    tool_overrides:
+      create_issue: write
+      list_issues: read

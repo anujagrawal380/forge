@@ -1,0 +1,23 @@
+# Runnable demo — no credentials required.
+# Onboards the official MCP "everything" reference server (spawned via npx) to prove the
+# generic connector layer: connect → discover tools → classify read/write.
+#
+#   npm run forge -- connectors test --config examples/everything-demo/agent.yaml
+
+agent:
+  name: everything-demo
+  mode: draft
+  instructions: |
+    Demo agent. Proves Forge can onboard an arbitrary MCP server from config alone,
+    with no connector-specific code.
+
+connectors:
+  everything:
+    type: mcp
+    transport:
+      type: stdio
+      command: npx
+      args: ["-y", "@modelcontextprotocol/server-everything"]
+    # Demonstrates human-authoritative classification overriding the heuristic:
+    tool_overrides:
+      echo: read
