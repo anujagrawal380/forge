@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 import { loadConfig, ConfigError } from "../config/load.js";
 import { ConnectorManager, type ConnectorResult } from "../connectors/manager.js";
+import { buildAgent, resolveApiKey, AgentBuildError } from "../agent/build.js";
 
 const HELP = `forge — turn a YAML file into a durable agent for your tool stack
 
 Usage:
   forge config validate [--config <path>]     Validate agent.yaml (fail fast, actionable errors)
   forge connectors test  [--config <path>]     Connect to each connector, discover & classify tools
+  forge run --message <text> [--config <path>] Run the agent once with a prompt (requires an LLM key)
 
 Options:
   --config <path>   Path to agent.yaml (default: ./agent.yaml)
+  --message <text>  Prompt for 'forge run'
   --json            Machine-readable output
   -h, --help        Show this help
 `;
@@ -17,6 +20,7 @@ Options:
 interface Args {
   cmd: string[];
   config: string;
+  message?: string;
   json: boolean;
   help: boolean;
 }
@@ -26,6 +30,7 @@ function parseArgs(argv: string[]): Args {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--config") out.config = argv[++i] ?? out.config;
+    else if (a === "--message" || a === "-m") out.message = argv[++i];
     else if (a === "--json") out.json = true;
     else if (a === "-h" || a === "--help") out.help = true;
     else out.cmd.push(a);
@@ -101,6 +106,77 @@ function printResults(results: ConnectorResult[]): void {
   );
 }
 
+function extractText(message: unknown): string {
+  const content = (message as { content?: unknown })?.content;
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b): b is { type: "text"; text: string } => (b as any)?.type === "text")
+      .map((b) => b.text)
+      .join("");
+  }
+  return "";
+}
+
+async function cmdRun(args: Args): Promise<number> {
+  if (!args.message) {
+    console.error(RED("✗ 'forge run' requires --message <text>"));
+    return 1;
+  }
+  const { config } = loadConfig(args.config);
+
+  // Preflight: fail fast with an actionable error if no LLM key is resolvable (PRD F53).
+  if (!config.agent.llm) {
+    console.error(RED("✗ agent.llm is required to run — set provider + model in agent.yaml"));
+    return 1;
+  }
+  const key = resolveApiKey(config.agent.llm.provider, config.agent.llm);
+  if (!key) {
+    const hint = config.agent.llm.api_key_env ?? `${config.agent.llm.provider.toUpperCase()}_API_KEY`;
+    console.error(RED(`✗ no API key for provider "${config.agent.llm.provider}". Set ${hint} in your environment/.env.`));
+    return 1;
+  }
+
+  const manager = new ConnectorManager(config);
+  const results = await manager.onboardAll();
+  for (const r of results) {
+    if (!r.ok) console.error(YELLOW(`⚠ connector "${r.name}" failed to onboard: ${r.error} (continuing without it)`));
+  }
+
+  const { agent, toolCount } = buildAgent(config, manager, (e) => {
+    if (e.phase === "gate") {
+      const mark = e.decision === "allow" ? GREEN("allow") : RED("block");
+      console.log(DIM(`    · gate ${mark} ${e.tool} [${e.opType}]${e.decision === "block" ? " — " + e.reason : ""}`));
+    } else {
+      console.log(DIM(`    · result ${e.tool} ${e.isError ? RED("error") : "ok"}`));
+    }
+  });
+
+  console.log(DIM(`agent "${config.agent.name}" · mode=${config.agent.mode} · ${toolCount} tool(s) · ${config.agent.llm.provider}/${config.agent.llm.model}\n`));
+
+  agent.subscribe((event) => {
+    if (event.type === "tool_execution_start") {
+      console.log(`  ${BOLD("→")} ${event.toolName}`);
+    } else if (event.type === "message_end" && (event.message as any)?.role === "assistant") {
+      const text = extractText(event.message);
+      if (text.trim()) console.log("\n" + text.trim() + "\n");
+    }
+  });
+
+  try {
+    await agent.prompt(args.message);
+    await agent.waitForIdle();
+  } finally {
+    await manager.closeAll();
+  }
+  const err = agent.state.errorMessage;
+  if (err) {
+    console.error(RED("✗ run ended with error: " + err));
+    return 1;
+  }
+  return 0;
+}
+
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.cmd.length === 0) {
@@ -111,11 +187,12 @@ async function main(): Promise<number> {
   try {
     if (group === "config" && sub === "validate") return cmdValidate(args);
     if (group === "connectors" && (sub === "test" || sub === "list")) return await cmdConnectorsTest(args);
+    if (group === "run") return await cmdRun(args);
     console.log(RED(`Unknown command: ${args.cmd.join(" ")}`));
     console.log(HELP);
     return 1;
   } catch (e) {
-    if (e instanceof ConfigError) {
+    if (e instanceof ConfigError || e instanceof AgentBuildError) {
       console.error(RED("✗ " + e.message));
       return 1;
     }
